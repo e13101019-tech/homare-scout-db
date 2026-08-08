@@ -310,6 +310,7 @@
             <option>監督</option>
             <option>安先生</option>
             <option>吉永先生</option>
+            <option>尾関さん</option>
           </select>
         </label>
 
@@ -408,7 +409,7 @@
           <span class="lbl">決定<span class="req">*</span></span>
           <div class="radio-row">
             <label><input type="radio" name="decision" value="入学予定" required><span>入学予定</span></label>
-            <label><input type="radio" name="decision" value="保留"><span>保留</span></label>
+            <label><input type="radio" name="decision" value="保留／決定待ち"><span>保留／決定待ち</span></label>
             <label><input type="radio" name="decision" value="なし"><span>なし</span></label>
           </div>
         </label>
@@ -493,7 +494,7 @@ async function loadDashboard() {
   if (dash.ok) {
     document.getElementById('dashTotalYes').innerHTML = (dash.summary['入学予定'] || 0) + '<span>人</span>';
     document.getElementById('statYes').textContent = dash.summary['入学予定'] || 0;
-    document.getElementById('statPending').textContent = dash.summary['保留'] || 0;
+    document.getElementById('statPending').textContent = dash.summary['保留／決定待ち'] || 0;
     document.getElementById('statNo').textContent = dash.summary['なし'] || 0;
   }
   const el = document.getElementById('dashList');
@@ -504,7 +505,7 @@ async function loadDashboard() {
   }
 }
 function entryRowHtml(r) {
-  const cls = r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留' ? 'badge-pending' : 'badge-no';
+  const cls = r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留／決定待ち' ? 'badge-pending' : 'badge-no';
   return `<div class="entry-row">
     <div><div class="entry-name">${esc(r.name)}</div><div class="entry-sub">${esc(r.team)}</div></div>
     <span class="badge ${cls}">${esc(r.decision || '未設定')}</span>
@@ -527,7 +528,7 @@ async function loadList() {
     <div class="card ${r.decision === '入学予定' ? 'highlight' : ''}">
       <div class="card-top">
         <span class="card-name">${esc(r.name)}</span>
-        <span class="badge ${r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留' ? 'badge-pending' : 'badge-no'}">${esc(r.decision || '未設定')}</span>
+        <span class="badge ${r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留／決定待ち' ? 'badge-pending' : 'badge-no'}">${esc(r.decision || '未設定')}</span>
       </div>
       <div class="card-meta">
         ${esc(r.team)} / ${esc(r.school || '中学未記入')}<br>
