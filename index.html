@@ -1,797 +1,318 @@
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>スカウトDB</title>
-<link rel="icon" type="image/png" href="favicon-32.png">
-<link rel="apple-touch-icon" href="apple-touch-icon-180.png">
-<link rel="manifest" href="manifest.json">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Scout DB">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#2B5D3F">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --bg: #F7F7F5;
-    --surface: #FFFFFF;
-    --border: #DEDEDA;
-    --text: #1C1C1E;
-    --text-muted: #6B6B6B;
-    --accent: #2B5D3F;
-    --accent-light: #E7EFE9;
-    --gold: #C99A3E;
-    --gold-light: #FBF3E1;
-    --danger: #B3483F;
-    --radius: 10px;
-    --mono: 'JetBrains Mono', monospace;
-    --sans: 'Noto Sans JP', sans-serif;
+/**
+ * スカウトDB API (GAS Web App)
+ * ------------------------------------------------
+ * フロント(GitHub Pages)からfetchでアクセスするJSON API。
+ * スプレッドシート1つ(Master)をバックエンドDBとして使う。
+ *
+ * Masterシート列構成 (1行目ヘッダー):
+ * A:timestamp  B:year  C:playerId  D:rank  E:staff  F:team  G:name
+ * H:school  I:posMain  J:posBest  K:posSub  L:gpa  M:pitchHand  N:batHand
+ * O:feature  P:lodging  Q:scholarship  R:otherNotes  S:decision
+ *
+ * decision: "入学予定" | "保留／決定待ち" | "なし"
+ */
+
+const SHEET_ID = '1_Ee6w-4gOqflK_HNgAAhGLmA7FstiTgRe_9IfkIaAwE';
+const SHEET_NAME = 'Master';
+
+const HEADERS = [
+  'timestamp', 'year', 'playerId', 'rank', 'staff', 'team', 'name',
+  'school', 'posMain', 'posBest', 'posSub', 'gpa', 'pitchHand', 'batHand',
+  'feature', 'lodging', 'scholarship', 'otherNotes', 'decision', 'entryId'
+];
+
+// 編集で上書き可能なフィールド(timestamp/playerId/entryIdは編集不可)
+const EDITABLE_FIELDS = [
+  'year', 'rank', 'staff', 'team', 'name', 'school', 'posMain', 'posBest',
+  'posSub', 'gpa', 'pitchHand', 'batHand', 'feature', 'lodging',
+  'scholarship', 'otherNotes', 'decision'
+];
+
+function getSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.appendRow(HEADERS);
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--sans);
-    -webkit-font-smoothing: antialiased;
-  }
-  #app { max-width: 640px; margin: 0 auto; padding: 0 0 80px; min-height: 100vh; }
-
-  header {
-    padding: 20px 20px 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  header img.app-icon {
-    width: 44px;
-    height: 44px;
-    border-radius: 10px;
-    flex-shrink: 0;
-  }
-  header .header-text h1 { margin: 0 0 4px; }
-  header .header-text p { margin: 0 0 16px; }
-  header h1 {
-    font-family: var(--mono);
-    font-size: 15px;
-    letter-spacing: 0.08em;
-    font-weight: 700;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin: 0 0 4px;
-  }
-  header p { margin: 0 0 16px; font-size: 12px; color: var(--text-muted); }
-
-  nav.tabs {
-    display: flex;
-    gap: 4px;
-    padding: 0 20px;
-    position: sticky;
-    top: 0;
-    background: var(--bg);
-    z-index: 10;
-    padding-top: 8px;
-    padding-bottom: 12px;
-  }
-  nav.tabs button {
-    flex: 1;
-    padding: 10px 6px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text-muted);
-    border-radius: var(--radius);
-    font-family: var(--sans);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all .15s ease;
-  }
-  nav.tabs button.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-  }
-
-  main { padding: 0 20px; }
-  section { display: none; }
-  section.active { display: block; }
-
-  select, input, textarea {
-    width: 100%;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--surface);
-    font-family: var(--sans);
-    font-size: 14px;
-    color: var(--text);
-  }
-  select:focus, input:focus, textarea:focus {
-    outline: none;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-light);
-  }
-  label.field { display: block; margin-bottom: 14px; }
-  label.field .lbl {
-    display: block;
-    font-size: 12px;
-    color: var(--text-muted);
-    margin-bottom: 5px;
-    font-weight: 500;
-  }
-  label.field .lbl .req { color: var(--danger); margin-left: 2px; }
-
-  .radio-row { display: flex; gap: 8px; flex-wrap: wrap; }
-  .radio-row label {
-    flex: 1;
-    min-width: 70px;
-    text-align: center;
-    padding: 9px 6px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font-size: 13px;
-    cursor: pointer;
-    background: var(--surface);
-    user-select: none;
-  }
-  .radio-row input { display: none; }
-  .radio-row input:checked + span { font-weight: 700; }
-  .radio-row label:has(input:checked) {
-    background: var(--accent-light);
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .btn {
-    display: block;
-    width: 100%;
-    padding: 13px;
-    border: none;
-    border-radius: 8px;
-    font-family: var(--sans);
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  .btn-primary { background: var(--accent); color: #fff; }
-  .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); margin-top: 8px; }
-  .btn:disabled { opacity: .5; cursor: not-allowed; }
-
-  /* Dashboard */
-  .scoreboard {
-    background: var(--text);
-    border-radius: 14px;
-    padding: 24px 20px;
-    text-align: center;
-    margin-bottom: 12px;
-  }
-  .scoreboard .label {
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.12em;
-    color: var(--gold);
-    text-transform: uppercase;
-  }
-  .scoreboard .num {
-    font-family: var(--mono);
-    font-size: 56px;
-    font-weight: 700;
-    color: #fff;
-    line-height: 1.1;
-    font-variant-numeric: tabular-nums;
-  }
-  .scoreboard .num span { font-size: 18px; color: #999; margin-left: 4px; }
-
-  .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 20px; }
-  .stat-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px 8px;
-    text-align: center;
-  }
-  .stat-card .stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
-  .stat-card .stat-num { font-family: var(--mono); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-
-  .entry-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 0;
-    border-bottom: 1px solid var(--border);
-  }
-  .entry-row:last-child { border-bottom: none; }
-  .entry-name { font-size: 14px; font-weight: 500; }
-  .entry-sub { font-size: 12px; color: var(--text-muted); }
-  .badge {
-    font-size: 11px;
-    font-weight: 700;
-    padding: 4px 10px;
-    border-radius: 20px;
-    white-space: nowrap;
-  }
-  .badge-yes { background: var(--gold-light); color: #8a6a1f; }
-  .badge-pending { background: var(--accent-light); color: var(--accent); }
-  .badge-no { background: #F1F1EF; color: var(--text-muted); }
-
-  .year-select-row { margin-bottom: 16px; }
-
-  /* List */
-  .list-header { display: flex; gap: 8px; margin-bottom: 12px; align-items: center; }
-  .list-header select { flex: 1; }
-  .sort-th { font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; }
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 10px;
-  }
-  .card.highlight { border-color: var(--gold); background: var(--gold-light); }
-  .card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
-  .card-name { font-size: 15px; font-weight: 700; }
-  .card-meta { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
-
-  /* Modal */
-  .modal-backdrop {
-    position: fixed; inset: 0; background: rgba(0,0,0,.45);
-    display: none; align-items: center; justify-content: center; padding: 20px; z-index: 100;
-  }
-  .modal-backdrop.show { display: flex; }
-  .modal {
-    background: var(--surface); border-radius: 14px; padding: 20px; width: 100%; max-width: 360px;
-  }
-  .modal h3 { margin: 0 0 8px; font-size: 16px; }
-  .modal p { font-size: 13px; color: var(--text-muted); margin: 0 0 16px; }
-
-  .toast {
-    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-    background: var(--text); color: #fff; padding: 12px 20px; border-radius: 8px;
-    font-size: 13px; z-index: 200; display: none;
-  }
-  .toast.show { display: block; }
-  .error-list { font-size: 12px; color: var(--danger); margin: 8px 0 0; padding-left: 18px; }
-  .empty-state { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 13px; }
-</style>
-</head>
-<body>
-<div id="app">
-  <header>
-    <img class="app-icon" src="icon-small-64.png" alt="">
-    <div class="header-text">
-      <h1>Scout DB</h1>
-      <p>Vector Link / スカウト管理</p>
-    </div>
-  </header>
-
-  <nav class="tabs">
-    <button data-tab="dashboard" class="active">ダッシュボード</button>
-    <button data-tab="list">スカウト状況</button>
-    <button data-tab="input">入力</button>
-  </nav>
-
-  <main>
-    <!-- DASHBOARD -->
-    <section id="tab-dashboard" class="active">
-      <div class="year-select-row">
-        <select id="dashYear"></select>
-      </div>
-      <div class="scoreboard">
-        <div class="label">入学予定 合計</div>
-        <div class="num" id="dashTotalYes">0<span>人</span></div>
-      </div>
-      <div class="stat-grid">
-        <div class="stat-card"><div class="stat-label">入学予定</div><div class="stat-num" id="statYes">0</div></div>
-        <div class="stat-card"><div class="stat-label">保留</div><div class="stat-num" id="statPending">0</div></div>
-        <div class="stat-card"><div class="stat-label">なし</div><div class="stat-num" id="statNo">0</div></div>
-      </div>
-      <p style="font-size:12px;color:var(--text-muted);margin-bottom:6px;">エントリー一覧（新着順）</p>
-      <div class="card" id="dashList" style="padding:4px 14px;"></div>
-    </section>
-
-    <!-- LIST -->
-    <section id="tab-list">
-      <div class="list-header">
-        <select id="listYear"></select>
-        <select id="listSort">
-          <option value="timestamp">登録順</option>
-          <option value="rank">ランク順</option>
-          <option value="name">名前順</option>
-          <option value="decision">決定順</option>
-        </select>
-      </div>
-      <div id="listResults"></div>
-    </section>
-
-    <!-- INPUT -->
-    <section id="tab-input">
-      <form id="entryForm">
-        <label class="field">
-          <span class="lbl">対象年度<span class="req">*</span></span>
-          <select name="year" required>
-            <option value="">選択してください</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="lbl">ランク<span class="req">*</span></span>
-          <div class="radio-row">
-            <label><input type="radio" name="rank" value="1" required><span>1 入学確定</span></label>
-            <label><input type="radio" name="rank" value="2"><span>2 候補</span></label>
-            <label><input type="radio" name="rank" value="3"><span>3 望み薄/お断り</span></label>
-          </div>
-        </label>
-
-        <label class="field">
-          <span class="lbl">担当者<span class="req">*</span></span>
-          <select name="staff" required>
-            <option value="">選択してください</option>
-            <option>監督</option>
-            <option>安</option>
-            <option>吉永</option>
-            <option>尾関</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="lbl">チーム名<span class="req">*</span></span>
-          <input type="text" name="team" required>
-        </label>
-
-        <label class="field">
-          <span class="lbl">名前<span class="req">*</span></span>
-          <input type="text" name="name" required>
-        </label>
-
-        <label class="field">
-          <span class="lbl">中学校名</span>
-          <input type="text" name="school">
-        </label>
-
-        <label class="field">
-          <span class="lbl">ポジション(メイン)</span>
-          <select name="posMain">
-            <option value="">選択してください</option>
-            <option>投</option><option>捕</option><option>内野</option><option>外野</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="lbl">最も得意とするポジション(1つ)</span>
-          <select name="posBest">
-            <option value="">選択してください</option>
-            <option>投</option><option>捕</option><option>一塁</option><option>二塁</option>
-            <option>三塁</option><option>遊撃</option><option>外野</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="lbl">ポジション(サブ)</span>
-          <select name="posSub">
-            <option value="">選択してください</option>
-            <option>投</option><option>捕</option><option>内野</option><option>外野</option><option>DH</option>
-          </select>
-        </label>
-
-        <label class="field">
-          <span class="lbl">中学の評定</span>
-          <input type="text" name="gpa" placeholder="例: 24-26">
-        </label>
-
-        <label class="field">
-          <span class="lbl">投</span>
-          <div class="radio-row">
-            <label><input type="radio" name="pitchHand" value="右"><span>右</span></label>
-            <label><input type="radio" name="pitchHand" value="左"><span>左</span></label>
-            <label><input type="radio" name="pitchHand" value="両"><span>両</span></label>
-          </div>
-        </label>
-
-        <label class="field">
-          <span class="lbl">打</span>
-          <div class="radio-row">
-            <label><input type="radio" name="batHand" value="右"><span>右</span></label>
-            <label><input type="radio" name="batHand" value="左"><span>左</span></label>
-            <label><input type="radio" name="batHand" value="両"><span>両</span></label>
-          </div>
-        </label>
-
-        <label class="field">
-          <span class="lbl">特徴</span>
-          <textarea name="feature" rows="2"></textarea>
-        </label>
-
-        <label class="field">
-          <span class="lbl">下宿or通い</span>
-          <div class="radio-row">
-            <label><input type="radio" name="lodging" value="下宿"><span>下宿</span></label>
-            <label><input type="radio" name="lodging" value="通い"><span>通い</span></label>
-          </div>
-        </label>
-
-        <label class="field">
-          <span class="lbl">特待</span>
-          <div class="radio-row">
-            <label><input type="radio" name="scholarship" value="A"><span>A</span></label>
-            <label><input type="radio" name="scholarship" value="B"><span>B</span></label>
-            <label><input type="radio" name="scholarship" value="C"><span>C</span></label>
-            <label><input type="radio" name="scholarship" value="なし"><span>なし</span></label>
-          </div>
-        </label>
-
-        <label class="field">
-          <span class="lbl">その他特記事項</span>
-          <textarea name="otherNotes" rows="2"></textarea>
-        </label>
-
-        <label class="field">
-          <span class="lbl">決定<span class="req">*</span></span>
-          <div class="radio-row">
-            <label><input type="radio" name="decision" value="入学予定" required><span>入学予定</span></label>
-            <label><input type="radio" name="decision" value="保留／決定待ち"><span>保留／決定待ち</span></label>
-            <label><input type="radio" name="decision" value="なし"><span>なし</span></label>
-          </div>
-        </label>
-
-        <ul class="error-list" id="formErrors" style="display:none;"></ul>
-        <button type="submit" class="btn btn-primary" id="submitBtn">送信</button>
-      </form>
-    </section>
-  </main>
-</div>
-
-<div class="modal-backdrop" id="dupModal">
-  <div class="modal">
-    <h3>既存選手が見つかりました</h3>
-    <p id="dupModalText"></p>
-    <button class="btn btn-primary" id="dupUseExisting">既存選手に評価を追記する</button>
-    <button class="btn btn-secondary" id="dupCreateNew">新規選手として登録する</button>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="editModal">
-  <div class="modal" style="max-height:85vh;overflow-y:auto;">
-    <h3>選手情報を編集</h3>
-    <form id="editForm">
-      <label class="field">
-        <span class="lbl">対象年度<span class="req">*</span></span>
-        <select name="year" required></select>
-      </label>
-      <label class="field">
-        <span class="lbl">ランク<span class="req">*</span></span>
-        <div class="radio-row">
-          <label><input type="radio" name="rank" value="1" required><span>1 入学確定</span></label>
-          <label><input type="radio" name="rank" value="2"><span>2 候補</span></label>
-          <label><input type="radio" name="rank" value="3"><span>3 望み薄/お断り</span></label>
-        </div>
-      </label>
-      <label class="field">
-        <span class="lbl">担当者<span class="req">*</span></span>
-        <select name="staff" required>
-          <option value="">選択してください</option>
-          <option>監督</option><option>安</option><option>吉永</option><option>尾関</option>
-        </select>
-      </label>
-      <label class="field"><span class="lbl">チーム名<span class="req">*</span></span><input type="text" name="team" required></label>
-      <label class="field"><span class="lbl">名前<span class="req">*</span></span><input type="text" name="name" required></label>
-      <label class="field"><span class="lbl">中学校名</span><input type="text" name="school"></label>
-      <label class="field">
-        <span class="lbl">ポジション(メイン)</span>
-        <select name="posMain">
-          <option value="">選択してください</option>
-          <option>投</option><option>捕</option><option>内野</option><option>外野</option>
-        </select>
-      </label>
-      <label class="field">
-        <span class="lbl">最も得意とするポジション</span>
-        <select name="posBest">
-          <option value="">選択してください</option>
-          <option>投</option><option>捕</option><option>一塁</option><option>二塁</option>
-          <option>三塁</option><option>遊撃</option><option>外野</option>
-        </select>
-      </label>
-      <label class="field">
-        <span class="lbl">ポジション(サブ)</span>
-        <select name="posSub">
-          <option value="">選択してください</option>
-          <option>投</option><option>捕</option><option>内野</option><option>外野</option><option>DH</option>
-        </select>
-      </label>
-      <label class="field"><span class="lbl">中学の評定</span><input type="text" name="gpa"></label>
-      <label class="field">
-        <span class="lbl">投</span>
-        <div class="radio-row">
-          <label><input type="radio" name="pitchHand" value="右"><span>右</span></label>
-          <label><input type="radio" name="pitchHand" value="左"><span>左</span></label>
-          <label><input type="radio" name="pitchHand" value="両"><span>両</span></label>
-        </div>
-      </label>
-      <label class="field">
-        <span class="lbl">打</span>
-        <div class="radio-row">
-          <label><input type="radio" name="batHand" value="右"><span>右</span></label>
-          <label><input type="radio" name="batHand" value="左"><span>左</span></label>
-          <label><input type="radio" name="batHand" value="両"><span>両</span></label>
-        </div>
-      </label>
-      <label class="field"><span class="lbl">特徴</span><textarea name="feature" rows="2"></textarea></label>
-      <label class="field">
-        <span class="lbl">下宿or通い</span>
-        <div class="radio-row">
-          <label><input type="radio" name="lodging" value="下宿"><span>下宿</span></label>
-          <label><input type="radio" name="lodging" value="通い"><span>通い</span></label>
-        </div>
-      </label>
-      <label class="field">
-        <span class="lbl">特待</span>
-        <div class="radio-row">
-          <label><input type="radio" name="scholarship" value="A"><span>A</span></label>
-          <label><input type="radio" name="scholarship" value="B"><span>B</span></label>
-          <label><input type="radio" name="scholarship" value="C"><span>C</span></label>
-          <label><input type="radio" name="scholarship" value="なし"><span>なし</span></label>
-        </div>
-      </label>
-      <label class="field"><span class="lbl">その他特記事項</span><textarea name="otherNotes" rows="2"></textarea></label>
-      <label class="field">
-        <span class="lbl">決定<span class="req">*</span></span>
-        <div class="radio-row">
-          <label><input type="radio" name="decision" value="入学予定" required><span>入学予定</span></label>
-          <label><input type="radio" name="decision" value="保留／決定待ち"><span>保留／決定待ち</span></label>
-          <label><input type="radio" name="decision" value="なし"><span>なし</span></label>
-        </div>
-      </label>
-      <ul class="error-list" id="editFormErrors" style="display:none;"></ul>
-      <button type="submit" class="btn btn-primary" id="editSaveBtn">保存</button>
-      <button type="button" class="btn btn-secondary" id="editCancelBtn">キャンセル</button>
-    </form>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-
-<script>
-// ================== 設定 ==================
-const API_URL = 'https://script.google.com/macros/s/AKfycbyxBBf7I1TwiEt-eol5HwWbU3T23pIR0qibDiDtNV3FaMHrfGhKSqyyzFukiEKE3M2C/exec';
-const CURRENT_YEAR = new Date().getFullYear();
-const YEAR_RANGE = [2027, 2028, 2029, 2030, 2031, 2032];
-
-// ================== API helper ==================
-async function apiGet(params) {
-  const url = new URL(API_URL);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
-  return res.json();
+  return sheet;
 }
-async function apiPost(body) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    // GASのCORS/preflight回避のためtext/plainで送信し、GAS側でJSON.parseする
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(body)
+
+function readAllRecords_() {
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  if (values.length < 2) return [];
+  const rows = values.slice(1);
+  return rows.map(row => {
+    const rec = {};
+    HEADERS.forEach((h, i) => { rec[h] = row[i]; });
+    return rec;
+  }).filter(rec => rec.name); // 空行除外
+}
+
+function jsonOut_(obj) {
+  // GAS Web Appは「全員(匿名可)」でデプロイすると自動でAccess-Control-Allow-Origin: *が付与される。
+  // フロント側はfetchのContent-Typeを"text/plain;charset=utf-8"にしてpreflightを回避すること。
+  return ContentService.createTextOutput(JSON.stringify(obj))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+const REQUIRED_FIELDS = ['year', 'rank', 'staff', 'team', 'name', 'decision'];
+const DECISION_VALUES = ['入学予定', '保留／決定待ち', 'なし'];
+const RANK_VALUES = ['1', '2', '3'];
+
+/**
+ * 入力バリデーション。エラーがあれば文字列配列を返す。空配列ならOK。
+ */
+function validateSubmit_(body) {
+  const errors = [];
+
+  REQUIRED_FIELDS.forEach(f => {
+    if (body[f] === undefined || String(body[f]).trim() === '') {
+      errors.push(`必須項目が未入力です: ${f}`);
+    }
   });
-  return res.json();
+
+  if (body.decision !== undefined && !DECISION_VALUES.includes(body.decision)) {
+    errors.push(`decisionの値が不正です: ${body.decision}`);
+  }
+
+  if (body.rank !== undefined && !RANK_VALUES.includes(String(body.rank))) {
+    errors.push(`rankの値が不正です: ${body.rank}`);
+  }
+
+  if (body.year !== undefined && !/^\d{4}$/.test(String(body.year))) {
+    errors.push(`yearは4桁の年で指定してください: ${body.year}`);
+  }
+
+  if (body.mode === 'existing' && !body.playerId) {
+    errors.push('modeがexistingの場合はplayerIdが必須です');
+  }
+
+  return errors;
 }
 
-// ================== Tabs ==================
-document.querySelectorAll('nav.tabs button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('nav.tabs button').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('main section').forEach(s => s.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-    if (btn.dataset.tab === 'dashboard') loadDashboard();
-    if (btn.dataset.tab === 'list') loadList();
+/**
+ * 文字列項目はtrimしてから保存する
+ */
+function sanitizeBody_(body) {
+  const cleaned = {};
+  Object.keys(body).forEach(k => {
+    cleaned[k] = typeof body[k] === 'string' ? body[k].trim() : body[k];
   });
-});
-
-function fillYearSelects() {
-  const opts = YEAR_RANGE.map(y => `<option value="${y}">${y}年入学</option>`).join('');
-  document.getElementById('dashYear').innerHTML = opts;
-  document.getElementById('listYear').innerHTML = opts;
-  document.querySelector('#entryForm select[name="year"]').innerHTML =
-    '<option value="">選択してください</option>' + opts;
-  document.querySelector('#editForm select[name="year"]').innerHTML = opts;
+  return cleaned;
 }
 
-// ================== Toast ==================
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
-
-// ================== Dashboard ==================
-async function loadDashboard() {
-  const year = document.getElementById('dashYear').value || YEAR_RANGE[0];
-  document.getElementById('dashYear').value = year;
-  const [dash, list] = await Promise.all([
-    apiGet({ action: 'dashboard', year }),
-    apiGet({ action: 'list', year, sort: 'timestamp', order: 'desc' })
-  ]);
-  if (dash.ok) {
-    document.getElementById('dashTotalYes').innerHTML = (dash.summary['入学予定'] || 0) + '<span>人</span>';
-    document.getElementById('statYes').textContent = dash.summary['入学予定'] || 0;
-    document.getElementById('statPending').textContent = dash.summary['保留／決定待ち'] || 0;
-    document.getElementById('statNo').textContent = dash.summary['なし'] || 0;
-  }
-  const el = document.getElementById('dashList');
-  if (list.ok && list.records.length) {
-    el.innerHTML = list.records.slice(0, 8).map(r => entryRowHtml(r)).join('');
-  } else {
-    el.innerHTML = '<div class="empty-state">まだエントリーがありません</div>';
-  }
-}
-function entryRowHtml(r) {
-  const cls = r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留／決定待ち' ? 'badge-pending' : 'badge-no';
-  return `<div class="entry-row">
-    <div><div class="entry-name">${esc(r.name)}</div><div class="entry-sub">${esc(r.team)}</div></div>
-    <span class="badge ${cls}">${esc(r.decision || '未設定')}</span>
-  </div>`;
-}
-document.getElementById('dashYear').addEventListener('change', loadDashboard);
-
-// ================== List ==================
-async function loadList() {
-  const year = document.getElementById('listYear').value || YEAR_RANGE[0];
-  document.getElementById('listYear').value = year;
-  const sort = document.getElementById('listSort').value;
-  const res = await apiGet({ action: 'list', year, sort, order: sort === 'timestamp' ? 'desc' : 'asc' });
-  const el = document.getElementById('listResults');
-  if (!res.ok || !res.records.length) {
-    el.innerHTML = '<div class="empty-state">対象年度のエントリーがありません</div>';
-    currentListRecords = [];
-    return;
-  }
-  currentListRecords = res.records;
-  el.innerHTML = res.records.map(r => `
-    <div class="card ${r.decision === '入学予定' ? 'highlight' : ''}" data-entry-id="${esc(r.entryId)}" style="cursor:pointer;">
-      <div class="card-top">
-        <span class="card-name">${esc(r.name)}</span>
-        <span class="badge ${r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留／決定待ち' ? 'badge-pending' : 'badge-no'}">${esc(r.decision || '未設定')}</span>
-      </div>
-      <div class="card-meta">
-        ${esc(r.team)} / ${esc(r.school || '中学未記入')}<br>
-        ランク${esc(r.rank)} ・ ${esc(r.posMain || '-')} ・ 担当:${esc(r.staff)}
-      </div>
-    </div>
-  `).join('');
-  el.querySelectorAll('.card').forEach(card => {
-    card.addEventListener('click', () => openEditModal(card.dataset.entryId));
-  });
-}
-document.getElementById('listYear').addEventListener('change', loadList);
-document.getElementById('listSort').addEventListener('change', loadList);
-let currentListRecords = [];
-
-// ================== Input / Submit ==================
-const form = document.getElementById('entryForm');
-let pendingSubmitData = null;
-
-form.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(form).entries());
-  const errEl = document.getElementById('formErrors');
-  errEl.style.display = 'none';
-  errEl.innerHTML = '';
-
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = true;
-  submitBtn.textContent = '確認中...';
-
+/**
+ * GET
+ *  ?action=list&year=2029          → 年度の全レコード
+ *  ?action=dashboard&year=2029     → 決定件数の集計
+ *  ?action=years                   → 登録済み年度の一覧
+ */
+function doGet(e) {
   try {
-    const dup = await apiPost({ action: 'checkDuplicate', name: data.name, team: data.team });
-    if (dup.ok && dup.match) {
-      pendingSubmitData = data;
-      document.getElementById('dupModalText').textContent =
-        `「${data.name}（${data.team}）」は${dup.match.year}年度にも登録があります。`;
-      document.getElementById('dupModal').dataset.playerId = dup.match.playerId;
-      document.getElementById('dupModal').classList.add('show');
-    } else {
-      await doSubmit(data, 'new', null);
+    const action = e.parameter.action;
+
+    if (action === 'years') {
+      const records = readAllRecords_();
+      const years = [...new Set(records.map(r => r.year))].sort();
+      return jsonOut_({ ok: true, years });
     }
+
+    if (action === 'list') {
+      const year = e.parameter.year;
+      if (!year) return jsonOut_({ ok: false, error: 'yearパラメータが必要です' });
+      const records = readAllRecords_().filter(r => String(r.year) === String(year));
+
+      // ソート指定に対応: ?sort=rank&order=asc
+      const sortKey = e.parameter.sort;
+      const order = e.parameter.order === 'desc' ? -1 : 1;
+      if (sortKey && HEADERS.includes(sortKey)) {
+        records.sort((a, b) => {
+          if (a[sortKey] < b[sortKey]) return -1 * order;
+          if (a[sortKey] > b[sortKey]) return 1 * order;
+          return 0;
+        });
+      }
+
+      return jsonOut_({ ok: true, records });
+    }
+
+    if (action === 'dashboard') {
+      const year = e.parameter.year;
+      if (!year) return jsonOut_({ ok: false, error: 'yearパラメータが必要です' });
+      const records = readAllRecords_().filter(r => String(r.year) === String(year));
+      const summary = { total: records.length, '入学予定': 0, '保留／決定待ち': 0, 'なし': 0 };
+      records.forEach(r => {
+        if (summary.hasOwnProperty(r.decision)) summary[r.decision]++;
+      });
+      return jsonOut_({ ok: true, summary });
+    }
+
+    return jsonOut_({ ok: false, error: 'unknown action' });
   } catch (err) {
-    showToast('通信エラーが発生しました');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.textContent = '送信';
-  }
-});
-
-document.getElementById('dupUseExisting').addEventListener('click', async () => {
-  const playerId = document.getElementById('dupModal').dataset.playerId;
-  document.getElementById('dupModal').classList.remove('show');
-  await doSubmit(pendingSubmitData, 'existing', playerId);
-});
-document.getElementById('dupCreateNew').addEventListener('click', async () => {
-  document.getElementById('dupModal').classList.remove('show');
-  await doSubmit(pendingSubmitData, 'new', null);
-});
-
-async function doSubmit(data, mode, playerId) {
-  const payload = { action: 'submit', mode, playerId, ...data };
-  const res = await apiPost(payload);
-  const errEl = document.getElementById('formErrors');
-  if (res.ok) {
-    showToast('登録しました');
-    form.reset();
-  } else if (res.error === 'validation') {
-    errEl.style.display = 'block';
-    errEl.innerHTML = res.details.map(d => `<li>${esc(d)}</li>`).join('');
-  } else {
-    showToast('登録に失敗しました: ' + (res.error || '不明なエラー'));
+    return jsonOut_({ ok: false, error: String(err) });
   }
 }
 
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-// ================== Edit ==================
-const editForm = document.getElementById('editForm');
-const editModal = document.getElementById('editModal');
-
-function openEditModal(entryId) {
-  const rec = currentListRecords.find(r => r.entryId === entryId);
-  if (!rec) return;
-  editForm.reset();
-  editForm.dataset.entryId = entryId;
-  Object.keys(rec).forEach(key => {
-    const field = editForm.elements[key];
-    if (!field) return;
-    if (field instanceof RadioNodeList || field.type === 'radio') {
-      const radios = editForm.querySelectorAll(`[name="${key}"]`);
-      radios.forEach(r => { r.checked = (r.value === String(rec[key])); });
-    } else {
-      field.value = rec[key] ?? '';
-    }
-  });
-  document.getElementById('editFormErrors').style.display = 'none';
-  editModal.classList.add('show');
-}
-
-document.getElementById('editCancelBtn').addEventListener('click', () => {
-  editModal.classList.remove('show');
-});
-
-editForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(editForm).entries());
-  const entryId = editForm.dataset.entryId;
-  const errEl = document.getElementById('editFormErrors');
-  errEl.style.display = 'none';
-  errEl.innerHTML = '';
-
-  const saveBtn = document.getElementById('editSaveBtn');
-  saveBtn.disabled = true;
-  saveBtn.textContent = '保存中...';
-
+/**
+ * POST (JSON body)
+ *  action: "checkDuplicate" { name, team }
+ *    → { ok:true, match: {playerId,...} | null }
+ *
+ *  action: "submit" { mode: "new"|"existing", playerId(existing時), ...fields }
+ *    → { ok:true, playerId }
+ */
+function doPost(e) {
   try {
-    const res = await apiPost({ action: 'update', entryId, ...data });
-    if (res.ok) {
-      showToast('更新しました');
-      editModal.classList.remove('show');
-      loadList();
-    } else if (res.error === 'validation') {
-      errEl.style.display = 'block';
-      errEl.innerHTML = res.details.map(d => `<li>${esc(d)}</li>`).join('');
-    } else {
-      showToast('更新に失敗しました: ' + (res.error || '不明なエラー'));
-    }
-  } catch (err) {
-    showToast('通信エラーが発生しました');
-  } finally {
-    saveBtn.disabled = false;
-    saveBtn.textContent = '保存';
-  }
-});
+    const raw = JSON.parse(e.postData.contents);
+    const body = sanitizeBody_(raw);
+    const action = body.action;
 
-// ================== Init ==================
-fillYearSelects();
-loadDashboard();
-</script>
-</body>
-</html>
+    if (action === 'checkDuplicate') {
+      if (!body.name || !body.team) {
+        return jsonOut_({ ok: false, error: 'nameとteamが必要です' });
+      }
+      const records = readAllRecords_();
+      const match = records.find(r =>
+        String(r.name).trim() === String(body.name).trim() &&
+        String(r.team).trim() === String(body.team).trim()
+      );
+      return jsonOut_({ ok: true, match: match || null });
+    }
+
+    if (action === 'submit') {
+      const errors = validateSubmit_(body);
+      if (errors.length > 0) {
+        return jsonOut_({ ok: false, error: 'validation', details: errors });
+      }
+
+      // LockServiceで同時書き込みによる採番衝突を防ぐ
+      const lock = LockService.getScriptLock();
+      lock.waitLock(10000);
+      try {
+        const sheet = getSheet_();
+        const playerId = body.mode === 'existing' && body.playerId
+          ? body.playerId
+          : generatePlayerId_();
+        const entryId = generateEntryId_();
+
+        const row = HEADERS.map(h => {
+          if (h === 'timestamp') return new Date();
+          if (h === 'playerId') return playerId;
+          if (h === 'entryId') return entryId;
+          return body[h] !== undefined ? body[h] : '';
+        });
+
+        sheet.appendRow(row);
+        return jsonOut_({ ok: true, playerId, entryId });
+      } finally {
+        lock.releaseLock();
+      }
+    }
+
+    if (action === 'update') {
+      if (!body.entryId) {
+        return jsonOut_({ ok: false, error: 'entryIdが必要です' });
+      }
+      const errors = validateSubmit_(body);
+      if (errors.length > 0) {
+        return jsonOut_({ ok: false, error: 'validation', details: errors });
+      }
+
+      const lock2 = LockService.getScriptLock();
+      lock2.waitLock(10000);
+      try {
+        const sheet = getSheet_();
+        const rowIndex = findRowIndexByEntryId_(sheet, body.entryId);
+        if (rowIndex === -1) {
+          return jsonOut_({ ok: false, error: '対象のレコードが見つかりません' });
+        }
+        // EDITABLE_FIELDSのみ上書き。timestamp/playerId/entryIdは維持
+        EDITABLE_FIELDS.forEach(field => {
+          const colIndex = HEADERS.indexOf(field) + 1; // 1-indexed
+          if (body[field] !== undefined) {
+            sheet.getRange(rowIndex, colIndex).setValue(body[field]);
+          }
+        });
+        return jsonOut_({ ok: true, entryId: body.entryId });
+      } finally {
+        lock2.releaseLock();
+      }
+    }
+
+    return jsonOut_({ ok: false, error: 'unknown action' });
+  } catch (err) {
+    return jsonOut_({ ok: false, error: String(err) });
+  }
+}
+
+function findRowIndexByEntryId_(sheet, entryId) {
+  const values = sheet.getDataRange().getValues();
+  const entryIdCol = HEADERS.indexOf('entryId');
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][entryIdCol]) === String(entryId)) {
+      return i + 1; // 1-indexed row number
+    }
+  }
+  return -1;
+}
+
+function generatePlayerId_() {
+  // 簡易連番ID: P + タイムスタンプ下6桁 + ランダム2桁
+  return 'P' + Utilities.formatDate(new Date(), 'JST', 'yyMMddHHmmss').slice(-8);
+}
+
+function generateEntryId_() {
+  // 各レコードを一意に識別するID(ミリ秒まで含めて衝突回避)
+  return 'E' + Utilities.formatDate(new Date(), 'JST', 'yyMMddHHmmssSSS');
+}
+
+/**
+ * 【一度だけ実行】entryId列が空の既存行にIDを振る移行スクリプト。
+ * GASエディタの関数選択プルダウンから backfillEntryIds を選んで実行してください。
+ */
+function backfillEntryIds() {
+  const sheet = getSheet_();
+
+  // ヘッダー行にentryId列が無ければ追加
+  const headerRow = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const entryIdCol = HEADERS.indexOf('entryId') + 1; // 1-indexed
+  if (headerRow[entryIdCol - 1] !== 'entryId') {
+    sheet.getRange(1, entryIdCol).setValue('entryId');
+  }
+
+  const values = sheet.getDataRange().getValues();
+  let count = 0;
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (!row[0]) continue; // 空行スキップ(timestampが空)
+    const currentEntryId = row[entryIdCol - 1];
+    if (!currentEntryId) {
+      sheet.getRange(i + 1, entryIdCol).setValue(generateEntryId_());
+      Utilities.sleep(5); // ミリ秒IDの衝突を避けるための微小待機
+      count++;
+    }
+  }
+  Logger.log(`entryIdを ${count} 件のレコードに付与しました`);
+}
+
+/**
+ * エディタ上の「実行」ボタンでdoGetをテストするための関数。
+ * 実行後、実行ログにJSON結果が表示される。
+ */
+function test_doGet_years() {
+  const result = doGet({ parameter: { action: 'years' } });
+  Logger.log(result.getContent());
+}
+
+function test_doGet_list() {
+  const result = doGet({ parameter: { action: 'list', year: '2029' } });
+  Logger.log(result.getContent());
+}
+
+function test_doGet_dashboard() {
+  const result = doGet({ parameter: { action: 'dashboard', year: '2029' } });
+  Logger.log(result.getContent());
+}
