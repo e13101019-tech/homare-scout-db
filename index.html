@@ -300,8 +300,11 @@
           <option value="rank">ランク順</option>
           <option value="name">名前順</option>
           <option value="decision">決定順</option>
+          <option value="posMain">ポジション順</option>
+          <option value="scholarship">特待順</option>
         </select>
       </div>
+      <input type="text" id="listSearch" placeholder="名前・チーム名で検索" style="margin-bottom:12px;">
       <div id="listResults"></div>
     </section>
 
@@ -644,14 +647,24 @@ async function loadList() {
   document.getElementById('listYear').value = year;
   const sort = document.getElementById('listSort').value;
   const res = await apiGet({ action: 'list', year, sort, order: sort === 'timestamp' ? 'desc' : 'asc' });
+  currentListRecords = res.ok ? res.records : [];
+  renderList();
+}
+function renderList() {
   const el = document.getElementById('listResults');
-  if (!res.ok || !res.records.length) {
-    el.innerHTML = '<div class="empty-state">対象年度のエントリーがありません</div>';
-    currentListRecords = [];
+  const query = document.getElementById('listSearch').value.trim().toLowerCase();
+  let records = currentListRecords;
+  if (query) {
+    records = records.filter(r =>
+      String(r.name || '').toLowerCase().includes(query) ||
+      String(r.team || '').toLowerCase().includes(query)
+    );
+  }
+  if (!records.length) {
+    el.innerHTML = `<div class="empty-state">${query ? '検索条件に一致するエントリーがありません' : '対象年度のエントリーがありません'}</div>`;
     return;
   }
-  currentListRecords = res.records;
-  el.innerHTML = res.records.map(r => `
+  el.innerHTML = records.map(r => `
     <div class="card ${r.decision === '入学予定' ? 'highlight' : ''}" data-entry-id="${esc(r.entryId)}" style="cursor:pointer;">
       <div class="card-top">
         <span class="card-name">${esc(r.name)}</span>
@@ -659,7 +672,7 @@ async function loadList() {
       </div>
       <div class="card-meta">
         ${esc(r.team)} / ${esc(r.school || '中学未記入')}<br>
-        ランク${esc(r.rank)} ・ ${esc(r.posMain || '-')} ・ 担当:${esc(r.staff)}
+        ランク${esc(r.rank)} ・ ${esc(r.posMain || '-')} ・ 特待:${esc(r.scholarship || '-')} ・ 担当:${esc(r.staff)}
       </div>
     </div>
   `).join('');
@@ -669,6 +682,7 @@ async function loadList() {
 }
 document.getElementById('listYear').addEventListener('change', loadList);
 document.getElementById('listSort').addEventListener('change', loadList);
+document.getElementById('listSearch').addEventListener('input', renderList);
 let currentListRecords = [];
 
 // ================== Input / Submit ==================
