@@ -254,6 +254,14 @@
   .toast.show { display: block; }
   .error-list { font-size: 12px; color: var(--danger); margin: 8px 0 0; padding-left: 18px; }
   .empty-state { text-align: center; padding: 40px 0; color: var(--text-muted); font-size: 13px; }
+
+  /* Ranking bars (集計タブ) */
+  .rank-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
+  .rank-row .rank-label { width: 92px; flex-shrink: 0; font-size: 13px; }
+  .rank-row .rank-track { flex: 1; height: 16px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+  .rank-row .rank-fill { height: 100%; background: var(--accent); border-radius: 4px; }
+  .rank-row.gold .rank-fill { background: var(--gold); }
+  .rank-row .rank-count { width: 28px; text-align: right; font-family: var(--mono); font-weight: 700; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -269,6 +277,7 @@
   <nav class="tabs">
     <button data-tab="dashboard" class="active">ダッシュボード</button>
     <button data-tab="list">スカウト状況</button>
+    <button data-tab="stats">集計</button>
     <button data-tab="input">入力</button>
   </nav>
 
@@ -308,6 +317,20 @@
       <div id="listResults"></div>
     </section>
 
+    <!-- STATS -->
+    <section id="tab-stats">
+      <div class="year-select-row">
+        <select id="statsYear">
+          <option value="all">全年度</option>
+        </select>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin:0 0 6px;">入学予定 都道府県別ランキング（チーム所在地）</p>
+      <div id="statsPrefecture" class="card" style="padding:14px;margin-bottom:20px;"></div>
+
+      <p style="font-size:12px;color:var(--text-muted);margin:0 0 6px;">担当者別 入学決定数ランキング</p>
+      <div id="statsStaff" class="card" style="padding:14px;"></div>
+    </section>
+
     <!-- INPUT -->
     <section id="tab-input">
       <form id="entryForm">
@@ -341,6 +364,60 @@
         <label class="field">
           <span class="lbl">チーム名<span class="req">*</span></span>
           <input type="text" name="team" required>
+        </label>
+
+        <label class="field">
+          <span class="lbl">都道府県(チーム所在地)</span>
+          <select name="prefecture">
+            <option value="">選択してください</option>
+            <option>北海道</option>
+            <option>青森県</option>
+            <option>岩手県</option>
+            <option>宮城県</option>
+            <option>秋田県</option>
+            <option>山形県</option>
+            <option>福島県</option>
+            <option>茨城県</option>
+            <option>栃木県</option>
+            <option>群馬県</option>
+            <option>埼玉県</option>
+            <option>千葉県</option>
+            <option>東京都</option>
+            <option>神奈川県</option>
+            <option>新潟県</option>
+            <option>富山県</option>
+            <option>石川県</option>
+            <option>福井県</option>
+            <option>山梨県</option>
+            <option>長野県</option>
+            <option>岐阜県</option>
+            <option>静岡県</option>
+            <option>愛知県</option>
+            <option>三重県</option>
+            <option>滋賀県</option>
+            <option>京都府</option>
+            <option>大阪府</option>
+            <option>兵庫県</option>
+            <option>奈良県</option>
+            <option>和歌山県</option>
+            <option>鳥取県</option>
+            <option>島根県</option>
+            <option>岡山県</option>
+            <option>広島県</option>
+            <option>山口県</option>
+            <option>徳島県</option>
+            <option>香川県</option>
+            <option>愛媛県</option>
+            <option>高知県</option>
+            <option>福岡県</option>
+            <option>佐賀県</option>
+            <option>長崎県</option>
+            <option>熊本県</option>
+            <option>大分県</option>
+            <option>宮崎県</option>
+            <option>鹿児島県</option>
+            <option>沖縄県</option>
+          </select>
         </label>
 
         <label class="field">
@@ -478,6 +555,59 @@
         </select>
       </label>
       <label class="field"><span class="lbl">チーム名<span class="req">*</span></span><input type="text" name="team" required></label>
+      <label class="field">
+        <span class="lbl">都道府県(チーム所在地)</span>
+        <select name="prefecture">
+          <option value="">選択してください</option>
+            <option>北海道</option>
+            <option>青森県</option>
+            <option>岩手県</option>
+            <option>宮城県</option>
+            <option>秋田県</option>
+            <option>山形県</option>
+            <option>福島県</option>
+            <option>茨城県</option>
+            <option>栃木県</option>
+            <option>群馬県</option>
+            <option>埼玉県</option>
+            <option>千葉県</option>
+            <option>東京都</option>
+            <option>神奈川県</option>
+            <option>新潟県</option>
+            <option>富山県</option>
+            <option>石川県</option>
+            <option>福井県</option>
+            <option>山梨県</option>
+            <option>長野県</option>
+            <option>岐阜県</option>
+            <option>静岡県</option>
+            <option>愛知県</option>
+            <option>三重県</option>
+            <option>滋賀県</option>
+            <option>京都府</option>
+            <option>大阪府</option>
+            <option>兵庫県</option>
+            <option>奈良県</option>
+            <option>和歌山県</option>
+            <option>鳥取県</option>
+            <option>島根県</option>
+            <option>岡山県</option>
+            <option>広島県</option>
+            <option>山口県</option>
+            <option>徳島県</option>
+            <option>香川県</option>
+            <option>愛媛県</option>
+            <option>高知県</option>
+            <option>福岡県</option>
+            <option>佐賀県</option>
+            <option>長崎県</option>
+            <option>熊本県</option>
+            <option>大分県</option>
+            <option>宮崎県</option>
+            <option>鹿児島県</option>
+            <option>沖縄県</option>
+        </select>
+      </label>
       <label class="field"><span class="lbl">名前<span class="req">*</span></span><input type="text" name="name" required></label>
       <label class="field"><span class="lbl">中学校名</span><input type="text" name="school"></label>
       <label class="field">
@@ -557,7 +687,7 @@
 
 <script>
 // ================== 設定 ==================
-const API_URL = 'https://script.google.com/macros/s/AKfycbwWgCIS_AGGKXpmGczmyHrlVPebMKNI4jhezhjND_jn5620Ud2c9m-2Amx-L9I3-oA/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxPb3WP8vJk9TSt9fdOQLb5gx4kdzOLp1KMHmSAlkVNpcv4cngI6nzb70HB7nRIzu6-/exec';
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_RANGE = [2027, 2028, 2029, 2030, 2031, 2032];
 
@@ -587,6 +717,7 @@ document.querySelectorAll('nav.tabs button').forEach(btn => {
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'dashboard') loadDashboard();
     if (btn.dataset.tab === 'list') loadList();
+    if (btn.dataset.tab === 'stats') loadStats();
   });
 });
 
@@ -594,6 +725,8 @@ function fillYearSelects() {
   const opts = YEAR_RANGE.map(y => `<option value="${y}">${y}年入学</option>`).join('');
   document.getElementById('dashYear').innerHTML = opts;
   document.getElementById('listYear').innerHTML = opts;
+  document.getElementById('statsYear').innerHTML =
+    '<option value="all">全年度</option>' + opts;
   document.querySelector('#entryForm select[name="year"]').innerHTML =
     '<option value="">選択してください</option>' + opts;
   document.querySelector('#editForm select[name="year"]').innerHTML = opts;
@@ -684,6 +817,33 @@ document.getElementById('listYear').addEventListener('change', loadList);
 document.getElementById('listSort').addEventListener('change', loadList);
 document.getElementById('listSearch').addEventListener('input', renderList);
 let currentListRecords = [];
+
+// ================== Stats ==================
+async function loadStats() {
+  const year = document.getElementById('statsYear').value || 'all';
+  const res = await apiGet({ action: 'stats', year });
+  if (!res.ok) return;
+  renderRanking('statsPrefecture', res.byPrefecture, false);
+  renderRanking('statsStaff', res.byStaff, true);
+}
+document.getElementById('statsYear').addEventListener('change', loadStats);
+
+function renderRanking(elId, counts, gold) {
+  const el = document.getElementById(elId);
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty-state">まだ入学予定のデータがありません</div>';
+    return;
+  }
+  const max = entries[0][1];
+  el.innerHTML = entries.map(([label, count]) => `
+    <div class="rank-row ${gold ? 'gold' : ''}">
+      <div class="rank-label">${esc(label)}</div>
+      <div class="rank-track"><div class="rank-fill" style="width:${Math.max(6, (count / max) * 100)}%"></div></div>
+      <div class="rank-count">${count}</div>
+    </div>
+  `).join('');
+}
 
 // ================== Input / Submit ==================
 const form = document.getElementById('entryForm');
