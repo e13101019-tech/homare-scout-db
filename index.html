@@ -554,7 +554,7 @@
 
 <script>
 // ================== 設定 ==================
-const API_URL = 'https://script.google.com/macros/s/AKfycbyZhNMl9ptXHtiG9MjyqR0RwDR2E4UUFQf_o41_1qQ1WjJLq-7jE0NLb5n48l3qk5NP/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwWgCIS_AGGKXpmGczmyHrlVPebMKNI4jhezhjND_jn5620Ud2c9m-2Amx-L9I3-oA/exec';
 const CURRENT_YEAR = new Date().getFullYear();
 const YEAR_RANGE = [2027, 2028, 2029, 2030, 2031, 2032];
 
@@ -620,14 +620,18 @@ async function loadDashboard() {
   }
   const el = document.getElementById('dashList');
   if (list.ok && list.records.length) {
+    currentListRecords = list.records; // 編集モーダルの参照用に共有
     el.innerHTML = list.records.slice(0, 8).map(r => entryRowHtml(r)).join('');
+    el.querySelectorAll('.entry-row').forEach(row => {
+      row.addEventListener('click', () => openEditModal(row.dataset.entryId));
+    });
   } else {
     el.innerHTML = '<div class="empty-state">まだエントリーがありません</div>';
   }
 }
 function entryRowHtml(r) {
   const cls = r.decision === '入学予定' ? 'badge-yes' : r.decision === '保留／決定待ち' ? 'badge-pending' : 'badge-no';
-  return `<div class="entry-row">
+  return `<div class="entry-row" data-entry-id="${esc(r.entryId)}" style="cursor:pointer;">
     <div><div class="entry-name">${esc(r.name)}</div><div class="entry-sub">${esc(r.team)}</div></div>
     <span class="badge ${cls}">${esc(r.decision || '未設定')}</span>
   </div>`;
